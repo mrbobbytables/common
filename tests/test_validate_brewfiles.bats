@@ -23,6 +23,9 @@ case "$1" in
             exit "${MOCK_TAP_STATUS}"
         fi
         ;;
+    trust)
+        [[ $# -eq 4 && "$3" == -- ]] || exit 99
+        ;;
     info)
         [[ $# -eq 4 && "$3" == -- ]] || exit 99
         case " ${MOCK_INFO_FAILURES:-} " in
@@ -211,3 +214,31 @@ teardown() {
     grep -qFx 'tap "ublue-os/tap", trusted: true' "${shared}/experimental-ide.Brewfile"
     run ! grep -q 'ublue-os/experimental-tap/zed-linux' "${shared}/experimental-ide.Brewfile"
 }
+
+@test "trusted third-party formula or cask runs brew trust and passes" {
+    printf 'brew "dapr/tap/dapr-cli", trusted: true\n' > "${FIXTURES}/test.Brewfile"
+    run bash "${SCRIPT}" "${FIXTURES}"
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"PASS: ${FIXTURES}/test.Brewfile:1: formula dapr/tap/dapr-cli"* ]]
+    grep -qFx 'trust|--formula|dapr/tap/dapr-cli' "${CALLS}"
+    grep -qFx 'info|--formula|dapr/tap/dapr-cli' "${CALLS}"
+}
+
+@test "untrusted third-party entry fails with clear needs trusted: true message" {
+    printf 'brew "dapr/tap/dapr-cli"\n' > "${FIXTURES}/test.Brewfile"
+    run bash "${SCRIPT}" "${FIXTURES}"
+    [ "${status}" -eq 1 ]
+    [[ "${output}" == *"FAIL: ${FIXTURES}/test.Brewfile:1: third-party formula dapr/tap/dapr-cli needs trusted: true"* ]]
+    run ! grep -q '^trust|' "${CALLS}"
+    run ! grep -q '^info|' "${CALLS}"
+}
+
+@test "non-literal trusted: option fails closed" {
+    printf 'brew "dapr/tap/dapr-cli", trusted: foo\n' > "${FIXTURES}/test.Brewfile"
+    run bash "${SCRIPT}" "${FIXTURES}"
+    [ "${status}" -eq 1 ]
+    [[ "${output}" == *"test.Brewfile:1: expected a quoted literal brew/cask name"* ]]
+    run ! grep -q '^trust|' "${CALLS}"
+    run ! grep -q '^info|' "${CALLS}"
+}
+

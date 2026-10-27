@@ -43,8 +43,11 @@ main() (
     # "# comment" would be parsed as code.
     tap_entry='^[[:space:]]*tap[[:space:]]+"[^#{}"\]+"([[:space:]]*,[[:space:]]*trusted:[[:space:]]*(true|false))?[[:space:]]*(#.*)?$'
     tap_single="^[[:space:]]*tap[[:space:]]+'[^'\\]+'([[:space:]]*,[[:space:]]*trusted:[[:space:]]*(true|false))?[[:space:]]*(#.*)?$"
+    tap_name_double='^[[:space:]]*tap[[:space:]]+"([^#{}"\]+)"([[:space:]]*,[[:space:]]*trusted:[[:space:]]*(true|false))?'
+    tap_name_single="^[[:space:]]*tap[[:space:]]+'([^'\\]+)'([[:space:]]*,[[:space:]]*trusted:[[:space:]]*(true|false))?"
     tap_declaration='^[[:space:]]*tap([^[:alnum:]_]|$)'
     : > "${workdir}/taps.Brewfile"
+    declare -A trusted_taps=()
     for brewfile in "${brewfiles[@]}"; do
         line_number=0
         while IFS= read -r line || [[ -n "${line}" ]]; do
@@ -52,6 +55,13 @@ main() (
             if [[ "${line}" =~ ${tap_declaration} ]]; then
                 if [[ "${line}" =~ ${tap_entry} || "${line}" =~ ${tap_single} ]]; then
                     printf '%s\n' "${line}" >> "${workdir}/taps.Brewfile"
+                    if [[ "${line}" =~ ${tap_name_double} || "${line}" =~ ${tap_name_single} ]]; then
+                        tap_name="${BASH_REMATCH[1]}"
+                        tap_trust="${BASH_REMATCH[3]:-}"
+                        if [[ "${tap_trust}" == "true" ]]; then
+                            trusted_taps["${tap_name}"]=1
+                        fi
+                    fi
                 else
                     printf 'FAIL: %s:%s: expected a quoted literal tap declaration: %s\n' "${brewfile}" "${line_number}" "${line}" >&2
                     printf 'Validation complete: refusing to evaluate non-literal tap lines.\n' >&2
@@ -78,8 +88,11 @@ main() (
 
     # The repository uses literal brew/cask declarations, not computed Ruby.
     # Reject malformed declarations rather than silently skipping them.
-    double_entry='^[[:space:]]*(brew|cask)[[:space:]]+"([^"]+)"([[:space:]]*,.*|[[:space:]]*(#.*)?)$'
-    single_entry="^[[:space:]]*(brew|cask)[[:space:]]+'([^']+)'([[:space:]]*,.*|[[:space:]]*(#.*)?)$"
+    #
+    # Optional trailing options are restricted: only literal trusted: true|false
+    # or args: { ... } are accepted. Non-literal trusted: values fail closed.
+    double_entry='^[[:space:]]*(brew|cask)[[:space:]]+"([^"]+)"([[:space:]]*,[[:space:]]*(trusted:[[:space:]]*(true|false)|args:[[:space:]]*\{[^}]*\}))?[[:space:]]*(#.*)?$'
+    single_entry="^[[:space:]]*(brew|cask)[[:space:]]+'([^']+)'([[:space:]]*,[[:space:]]*(trusted:[[:space:]]*(true|false)|args:[[:space:]]*\{[^}]*\}))?[[:space:]]*(#.*)?$"
     declaration='^[[:space:]]*(brew|cask)([^[:alnum:]_]|$)'
     checked=0
     failed=0
@@ -91,8 +104,43 @@ main() (
             if [[ "${line}" =~ ${double_entry} || "${line}" =~ ${single_entry} ]]; then
                 type="${BASH_REMATCH[1]}"
                 name="${BASH_REMATCH[2]}"
+                item_trust="${BASH_REMATCH[5]:-}"
                 [[ "${type}" != brew ]] || type=formula
                 checked=$((checked + 1))
+
+                # Check third-party trust requirement
+                tap_of_pkg=""
+                if [[ "${name}" =~ ^([a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+)/[a-zA-Z0-9_@.-]+$ ]]; then
+                    tap_of_pkg="${BASH_REMATCH[1]}"
+                fi
+
+                is_third_party=0
+                if [[ -n "${tap_of_pkg}" && ! "${tap_of_pkg}" =~ ^homebrew/ ]]; then
+                    is_third_party=1
+                fi
+
+                tap_is_trusted=0
+                if [[ -n "${tap_of_pkg}" && "${trusted_taps[${tap_of_pkg}]:-0}" -eq 1 ]]; then
+                    tap_is_trusted=1
+                fi
+
+                if [[ "${is_third_party}" -eq 1 && "${item_trust}" != "true" && "${tap_is_trusted}" -ne 1 ]]; then
+                    failed=$((failed + 1))
+                    printf 'FAIL: %s:%s: third-party %s %s needs trusted: true\n' "${brewfile}" "${line_number}" "${type}" "${name}" >&2
+                    continue
+                fi
+
+                if [[ "${item_trust}" == "true" ]]; then
+                    if ! brew trust "--${type}" -- "${name}" > "${workdir}/output" 2>&1; then
+                        rc=$?
+                        failed=$((failed + 1))
+                        printf 'FAIL: %s:%s: brew trust --%s -- %s (exit %s)\n' "${brewfile}" "${line_number}" "${type}" "${name}" "${rc}" >&2
+                        printf 'Command: brew trust --%s -- %q\n' "${type}" "${name}" >&2
+                        sed 's/^/  /' "${workdir}/output" >&2
+                        continue
+                    fi
+                fi
+
                 # Pass names as data, never interpolate them into bash -c.
                 # Serial checks keep each error adjacent to its source location.
                 if brew info "--${type}" -- "${name}" > "${workdir}/output" 2>&1; then
