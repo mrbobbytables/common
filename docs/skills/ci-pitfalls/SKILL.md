@@ -70,9 +70,12 @@ ambiguity, authentication, trust, network, and unavailable-cask errors into
 "invalid or missing tap". Pass package names as arguments, never into `bash -c`.
 
 The validator accepts literal `brew`/`cask` declarations (both quote styles,
-indentation, comments, and inline options). Malformed or computed names fail
-explicitly. `tap` lines must also be literal names; `trusted: true|false` is
-the only accepted option, and anything else fails before `brew bundle` runs.
+indentation, and comments). The only inline options accepted are a literal
+`trusted: true|false` or `args: { ... }`; anything else fails explicitly.
+Fully qualified entries from non-`homebrew/*` taps must carry `trusted: true`
+or come from a `tap` line declared `trusted: true`. `tap` lines must also be
+literal names; `trusted: true|false` is the only accepted option, and anything
+else fails before `brew bundle` runs.
 This is a metadata check, not a complete Ruby DSL, Flatpak, installation,
 checksum-download, or desktop-runtime test. It never installs
 formulae or casks. Keep mock regression tests in `tests/test_validate_brewfiles.bats`

@@ -25,6 +25,13 @@ case "$1" in
         ;;
     trust)
         [[ $# -eq 4 && "$3" == -- ]] || exit 99
+        case " ${MOCK_TRUST_FAILURES:-} " in
+            *" $4 "*)
+                echo 'trust stdout diagnostic'
+                echo "${MOCK_TRUST_ERROR:-trust stderr: trust failed}" >&2
+                exit "${MOCK_TRUST_STATUS:-43}"
+                ;;
+        esac
         ;;
     info)
         [[ $# -eq 4 && "$3" == -- ]] || exit 99
@@ -239,6 +246,17 @@ teardown() {
     [ "${status}" -eq 1 ]
     [[ "${output}" == *"test.Brewfile:1: expected a quoted literal brew/cask name"* ]]
     run ! grep -q '^trust|' "${CALLS}"
+    run ! grep -q '^info|' "${CALLS}"
+}
+
+@test "trust failure reports file line command exit code and original error" {
+    printf 'brew "dapr/tap/dapr-cli", trusted: true\n' > "${FIXTURES}/test.Brewfile"
+    MOCK_TRUST_FAILURES="dapr/tap/dapr-cli" run bash "${SCRIPT}" "${FIXTURES}"
+    [ "${status}" -eq 1 ]
+    [[ "${output}" == *"${FIXTURES}/test.Brewfile:1: brew trust --formula -- dapr/tap/dapr-cli (exit 43)"* ]]
+    [[ "${output}" == *"Command: brew trust --formula -- dapr/tap/dapr-cli"* ]]
+    [[ "${output}" == *"trust stdout diagnostic"* ]]
+    [[ "${output}" == *"trust stderr: trust failed"* ]]
     run ! grep -q '^info|' "${CALLS}"
 }
 

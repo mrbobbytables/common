@@ -101,9 +101,10 @@ cask "projectbluefin/tap/chairlift"
 
 The tap line requires `trusted: true`; Homebrew 6 blocks untrusted taps. For
 third-party formulae or casks in opt-in Brewfiles where the tap itself is not
-trusted as a whole, use item-level `trusted: true` (for example, `brew "dapr/tap/dapr-cli", trusted: true`). The
-cask must remain pinned upstream in `projectbluefin/tap` rather than being
-replaced with a local mutable download in common.
+trusted as a whole, use item-level `trusted: true` (for example,
+`brew "dapr/tap/dapr-cli", trusted: true`). The cask must remain pinned
+upstream in `projectbluefin/tap` rather than being replaced with a local
+mutable download in common.
 
 Bluefin owns `/usr/share/chairlift/config.yml`, shipped from
 `system_files/shared/usr/share/chairlift/config.yml`. `/etc/chairlift/config.yml`

@@ -131,8 +131,9 @@ main() (
                 fi
 
                 if [[ "${item_trust}" == "true" ]]; then
-                    if ! brew trust "--${type}" -- "${name}" > "${workdir}/output" 2>&1; then
-                        rc=$?
+                    rc=0
+                    brew trust "--${type}" -- "${name}" > "${workdir}/output" 2>&1 || rc=$?
+                    if [[ "${rc}" -ne 0 ]]; then
                         failed=$((failed + 1))
                         printf 'FAIL: %s:%s: brew trust --%s -- %s (exit %s)\n' "${brewfile}" "${line_number}" "${type}" "${name}" "${rc}" >&2
                         printf 'Command: brew trust --%s -- %q\n' "${type}" "${name}" >&2
