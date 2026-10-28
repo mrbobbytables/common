@@ -259,4 +259,3 @@ teardown() {
     [[ "${output}" == *"trust stderr: trust failed"* ]]
     run ! grep -q '^info|' "${CALLS}"
 }
-
