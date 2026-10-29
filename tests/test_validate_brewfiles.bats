@@ -80,6 +80,15 @@ teardown() {
     run ! grep -qE '^[[:space:]]*(brew|cask) ' "${TAPS}"
 }
 
+@test "tap trust in one Brewfile does not authorize entries in another" {
+    printf 'tap "one/tap", trusted: true\n' > "${FIXTURES}/a.Brewfile"
+    printf 'brew "one/tap/package"\n' > "${FIXTURES}/z.Brewfile"
+    run bash "${SCRIPT}" "${FIXTURES}"
+    [ "${status}" -eq 1 ]
+    [[ "${output}" == *"z.Brewfile:1: third-party formula one/tap/package needs trusted: true"* ]]
+    run ! grep -q '^info|' "${CALLS}"
+}
+
 # Ruby interpolation fixtures must stay literal in the shell.
 # shellcheck disable=SC2016
 @test "computed tap lines fail closed without reaching brew bundle" {

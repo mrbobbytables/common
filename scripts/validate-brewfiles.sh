@@ -59,7 +59,7 @@ main() (
                         tap_name="${BASH_REMATCH[1]}"
                         tap_trust="${BASH_REMATCH[3]:-}"
                         if [[ "${tap_trust}" == "true" ]]; then
-                            trusted_taps["${tap_name}"]=1
+                            trusted_taps["${brewfile}|${tap_name}"]=1
                         fi
                     fi
                 else
@@ -120,7 +120,7 @@ main() (
                 fi
 
                 tap_is_trusted=0
-                if [[ -n "${tap_of_pkg}" && "${trusted_taps[${tap_of_pkg}]:-0}" -eq 1 ]]; then
+                if [[ -n "${tap_of_pkg}" && "${trusted_taps[${brewfile}|${tap_of_pkg}]:-0}" -eq 1 ]]; then
                     tap_is_trusted=1
                 fi
 
